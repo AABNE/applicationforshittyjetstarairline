@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111418">
+  <meta name="description" content="Apply to join vJetstar Virtual Operations.">
+  <title>vJetstar | Pilot Application</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="page">
+    <div class="pattern" aria-hidden="true"></div>
+    <main class="layout">
+      <section class="brand">
+        <div class="logo">vJetstar<span class="star">★</span></div>
+        <div class="hero">
+          <div class="kicker">Pilot recruitment · Applications open</div>
+          <h1>Ready for your<br><span>next</span><br>sector?</h1>
+          <p class="brand-copy">Join vJetstar Virtual Airline and take your place in our Microsoft Flight Simulator operations.</p>
+        </div>
+        <div class="brand-foot">Independent virtual simulation product · Not affiliated with Jetstar Airways</div>
+      </section>
+
+      <section class="panel-wrap">
+        <div class="panel">
+          <div class="panel-logo">vJetstar<span class="orange">★</span></div>
+          <div class="kicker orange">Pilot recruitment</div>
+          <h2>Pilot application</h2>
+          <p class="intro">Enter your details and choose your preferred aircraft. Your application will be sent to the vJetstar recruitment team.</p>
+
+          <form id="apply-form">
+            <label class="field">
+              <span class="field-label">Pilot hub username</span>
+              <input name="username" type="text" minlength="3" maxlength="32" autocomplete="username" required placeholder="Choose your pilot username">
+            </label>
+
+            <div class="field">
+              <label class="field-label" for="discord-id">Discord user ID</label>
+              <input id="discord-id" name="discordId" type="text" inputmode="numeric" pattern="[0-9]{17,20}" minlength="17" maxlength="20" required placeholder="Enter your Discord user ID">
+              <p class="hint">Enable Developer Mode in Discord, then right-click your profile and choose Copy User ID.</p>
+              <div id="discord-preview" class="discord-preview" hidden>
+                <img id="discord-avatar" alt="Discord profile picture">
+                <div>
+                  <div id="discord-preview-name" class="discord-preview-name"></div>
+                  <div id="discord-preview-tag" class="discord-preview-tag"></div>
+                  <div class="discord-preview-ok">✓ Account found — check this is you</div>
+                </div>
+              </div>
+              <div id="discord-error" class="hint" role="status" aria-live="polite"></div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="cid">VATSIM CID</label>
+              <input id="cid" name="cid" type="text" inputmode="numeric" pattern="[0-9]{1,12}" maxlength="12" placeholder="Enter your VATSIM CID">
+              <label class="check-row vatsim-row"><input id="no-vatsim" name="noVatsim" type="checkbox"><span>I don't have a VATSIM CID yet</span></label>
+            </div>
+
+            <div class="section-title">Preferred aircraft · Select all that apply</div>
+            <div class="planes">
+              <label class="plane"><input type="checkbox" name="aircraft" value="A320"> Airbus A320</label>
+              <label class="plane"><input type="checkbox" name="aircraft" value="A320neo"> Airbus A320neo</label>
+              <label class="plane"><input type="checkbox" name="aircraft" value="A321"> Airbus A321</label>
+              <label class="plane"><input type="checkbox" name="aircraft" value="B787-8"> Boeing 787-8</label>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Email address</span>
+              <input name="email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com">
+            </label>
+
+            <label class="hp" aria-hidden="true">Leave this empty<input name="website" type="text" tabindex="-1" autocomplete="off"></label>
+            <button id="submit" type="submit"><span>Submit application</span><span aria-hidden="true">→</span></button>
+            <div id="notice" class="notice" role="status" aria-live="polite"></div>
+          </form>
+          <div class="footnote">Applications are reviewed by vJetstar operations. Aircraft assignments are managed by operations.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

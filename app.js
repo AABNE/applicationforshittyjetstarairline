@@ -108,7 +108,7 @@ form.addEventListener("submit", async event => {
     cid.disabled = false;
     cid.required = true;
     cid.placeholder = "Enter your VATSIM CID";
-    showNotice("Application submitted successfully. Recruitment has been notified.", "ok");
+    showNotice("Application submitted! Check #❔︱whats-next in our Discord server for information on what happens next.", "ok");
   } catch (error) {
     showNotice(error.message || "Something went wrong. Please try again.", "err");
   } finally {

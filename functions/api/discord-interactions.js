@@ -56,8 +56,7 @@ async function swapRoles(env, memberId, { remove = [], add = [] } = {}) {
   ]);
 }
 
-// Send a followup message to an interaction (used after deferred responses)
-async function editInteractionResponse(env, applicationId, interactionToken, data) {
+async function editOriginalResponse(applicationId, interactionToken, data) {
   return fetch(`https://discord.com/api/v10/webhooks/${applicationId}/${interactionToken}/messages/@original`, {
     method: "PATCH",
     headers: {
@@ -68,7 +67,12 @@ async function editInteractionResponse(env, applicationId, interactionToken, dat
   });
 }
 
-export async function onRequestPost({ request, env }) {
+// NOTE: We receive the full context object so we can call context.waitUntil()
+// This lets us return a response to Discord immediately (within 3s) and do
+// the actual API work (DMs, role swaps) in the background.
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
   if (!env.DISCORD_PUBLIC_KEY || !env.DISCORD_BOT_TOKEN || !env.DISCORD_USER_ID) {
     return json({ error: "Discord interactions are not configured." }, 503);
   }
@@ -82,7 +86,7 @@ export async function onRequestPost({ request, env }) {
   try { interaction = JSON.parse(rawBody); }
   catch { return json({ error: "Invalid JSON." }, 400); }
 
-  // Discord PING verification
+  // Discord PING verification — must respond synchronously
   if (interaction.type === 1) return json({ type: 1 });
 
   // Only handle button clicks (type 3)
@@ -92,7 +96,7 @@ export async function onRequestPost({ request, env }) {
   const applicationId = interaction.application_id;
   const interactionToken = interaction.token;
 
-  // ── "I've read #whats-next" button clicked by the applicant themselves ──────
+  // ── "I've read #whats-next" button (clicked by applicant) ───────────────────
   const readMatch = /^vjetstar:onboarded:([0-9]{17,20})$/.exec(customId);
   if (readMatch) {
     const applicantId = readMatch[1];
@@ -102,11 +106,8 @@ export async function onRequestPost({ request, env }) {
       return json({ type: 4, data: { content: "This button is only for the applicant.", flags: 64 } });
     }
 
-    // Respond immediately with deferred update, then do the work
-    const deferResponse = json({ type: 6 });
-
-    // Use waitUntil-style: kick off async work after returning the response
-    const work = async () => {
+    // Respond immediately with deferred update (type 6), do work in background
+    context.waitUntil((async () => {
       try {
         await swapRoles(env, applicantId, {
           remove: [env.ROLE_ACCEPTED_ID],
@@ -114,24 +115,17 @@ export async function onRequestPost({ request, env }) {
         });
       } catch { /* role swap is best-effort */ }
 
-      await editInteractionResponse(env, applicationId, interactionToken, {
+      await editOriginalResponse(applicationId, interactionToken, {
         content: "✅ You've been added as a **vJetstar Pilot**. Welcome to the team — see you in the skies! 🛫",
         components: [],
         allowed_mentions: { parse: [] }
       });
-    };
+    })());
 
-    // Cloudflare Workers: use ctx.waitUntil if available, otherwise fire-and-forget
-    if (typeof env.ctx?.waitUntil === "function") {
-      env.ctx.waitUntil(work());
-    } else {
-      work().catch(() => {});
-    }
-
-    return deferResponse;
+    return json({ type: 6 });
   }
 
-  // ── Accept / Decline buttons (recruitment admin only) ────────────────────────
+  // ── Accept / Decline buttons (recruitment admin only) ───────────────────────
   const match = /^vjetstar:(accept|decline):([0-9]{17,20})$/.exec(customId);
   if (!match) return json({ type: 4, data: { content: "This application button is invalid.", flags: 64 } });
 
@@ -166,39 +160,38 @@ export async function onRequestPost({ request, env }) {
       }]
     : [];
 
-  // ── IMPORTANT: Respond to Discord immediately (type 6 = deferred update) ────
-  // Discord requires a response within 3 seconds. All the API work (DM, role swap,
-  // editing the original message) happens after we've already responded.
-  const deferResponse = json({ type: 6 });
+  // Snapshot the message content/components now before going async
+  const originalContent = String(interaction.message?.content || "**vJetstar pilot application**");
+  const originalComponents = interaction.message?.components || [];
 
-  const doWork = async () => {
+  // Respond to Discord immediately (type 6 = deferred update), do everything in background
+  context.waitUntil((async () => {
     try {
       // Open DM channel with applicant
-      const dmChannelResponse = await discordApi(env, "/users/@me/channels", {
-        method: "POST", body: JSON.stringify({ recipient_id: applicantId })
+      const dmChannelRes = await discordApi(env, "/users/@me/channels", {
+        method: "POST",
+        body: JSON.stringify({ recipient_id: applicantId })
       });
 
-      if (!dmChannelResponse.ok) {
-        await editInteractionResponse(env, applicationId, interactionToken, {
-          content: String(interaction.message?.content || "") +
-            "\n\n⚠️ **Could not open a DM with the applicant.** Their privacy settings may block the bot.",
-          components: interaction.message?.components || [],
+      if (!dmChannelRes.ok) {
+        await editOriginalResponse(applicationId, interactionToken, {
+          content: originalContent + "\n\n⚠️ **Could not open a DM with the applicant.** Their privacy settings may block the bot.",
+          components: originalComponents,
           allowed_mentions: { parse: [] }
         });
         return;
       }
 
-      const dmChannel = await dmChannelResponse.json();
-      const dmResponse = await discordApi(env, `/channels/${dmChannel.id}/messages`, {
+      const dmChannel = await dmChannelRes.json();
+      const dmRes = await discordApi(env, `/channels/${dmChannel.id}/messages`, {
         method: "POST",
         body: JSON.stringify({ content: dmText, components: dmComponents, allowed_mentions: { parse: [] } })
       });
 
-      if (!dmResponse.ok) {
-        await editInteractionResponse(env, applicationId, interactionToken, {
-          content: String(interaction.message?.content || "") +
-            "\n\n⚠️ **Could not deliver the decision DM.** Try again.",
-          components: interaction.message?.components || [],
+      if (!dmRes.ok) {
+        await editOriginalResponse(applicationId, interactionToken, {
+          content: originalContent + "\n\n⚠️ **Could not deliver the decision DM.** Try again.",
+          components: originalComponents,
           allowed_mentions: { parse: [] }
         });
         return;
@@ -215,9 +208,8 @@ export async function onRequestPost({ request, env }) {
       }
 
       // Update the original application message: append decision + disable buttons
-      const oldContent = String(interaction.message?.content || "**vJetstar pilot application**");
-      const updatedContent = `${oldContent}\n\n**Decision: ${decisionLabel.toUpperCase()}**`;
-      const disabledComponents = (interaction.message?.components || []).map(row => ({
+      const updatedContent = `${originalContent}\n\n**Decision: ${decisionLabel.toUpperCase()}**`;
+      const disabledComponents = originalComponents.map(row => ({
         type: 1,
         components: (row.components || []).map(button => ({
           type: 2,
@@ -228,30 +220,22 @@ export async function onRequestPost({ request, env }) {
         }))
       }));
 
-      await editInteractionResponse(env, applicationId, interactionToken, {
+      await editOriginalResponse(applicationId, interactionToken, {
         content: updatedContent,
         components: disabledComponents,
         allowed_mentions: { parse: [] }
       });
 
     } catch {
-      // Best effort — if this fails, Discord already got our deferred ACK
       try {
-        await editInteractionResponse(env, applicationId, interactionToken, {
-          content: String(interaction.message?.content || "") +
-            "\n\n⚠️ **An error occurred while processing the decision.**",
-          components: interaction.message?.components || [],
+        await editOriginalResponse(applicationId, interactionToken, {
+          content: originalContent + "\n\n⚠️ **An error occurred while processing the decision.** Try again.",
+          components: originalComponents,
           allowed_mentions: { parse: [] }
         });
       } catch { /* nothing more we can do */ }
     }
-  };
+  })());
 
-  if (typeof env.ctx?.waitUntil === "function") {
-    env.ctx.waitUntil(doWork());
-  } else {
-    doWork().catch(() => {});
-  }
-
-  return deferResponse;
+  return json({ type: 6 });
 }

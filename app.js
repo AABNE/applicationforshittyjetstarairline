@@ -3,7 +3,7 @@ const noVatsim = document.querySelector("#no-vatsim");
 const cid = document.querySelector("#cid");
 const submit = document.querySelector("#submit");
 const notice = document.querySelector("#notice");
-const discordId = document.querySelector("#discord-id");
+const discordUsername = document.querySelector("#discord-username");
 const discordPreview = document.querySelector("#discord-preview");
 const discordAvatar = document.querySelector("#discord-avatar");
 const discordName = document.querySelector("#discord-preview-name");
@@ -26,35 +26,43 @@ noVatsim.addEventListener("change", () => {
 });
 cid.required = true;
 
-discordId.addEventListener("input", () => {
+discordUsername.addEventListener("input", () => {
   clearTimeout(lookupTimer);
   verifiedDiscordId = "";
   discordPreview.hidden = true;
   discordError.textContent = "";
 
-  const value = discordId.value.trim();
-  if (!/^[0-9]{17,20}$/.test(value)) {
-    if (value) discordError.textContent = "Enter a valid 17–20 digit Discord user ID.";
+  const value = discordUsername.value.trim();
+  // Accept username (2-32 chars, alphanumeric/dots/underscores/hyphens) or numeric ID
+  const isId = /^[0-9]{17,20}$/.test(value);
+  const isUsername = /^[a-zA-Z0-9._-]{2,32}$/.test(value);
+
+  if (!value) return;
+  if (!isId && !isUsername) {
+    discordError.textContent = "Enter your Discord username (e.g. aussieavia) or numeric user ID.";
     return;
   }
 
-  discordError.textContent = "Checking Discord account…";
+  discordError.textContent = "Looking up Discord account…";
   lookupTimer = setTimeout(async () => {
     try {
-      const response = await fetch(`/api/discord-user?id=${encodeURIComponent(value)}`);
+      const param = isId ? `id=${encodeURIComponent(value)}` : `username=${encodeURIComponent(value.toLowerCase())}`;
+      const response = await fetch(`/api/discord-user?${param}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Account lookup failed.");
-      if (discordId.value.trim() !== value) return;
+      if (discordUsername.value.trim() !== value) return;
 
       discordAvatar.src = result.avatar;
       discordName.textContent = result.globalName;
-      discordTag.textContent = `@${result.username} · ID ${result.id}`;
+      discordTag.textContent = `@${result.username}`;
       discordPreview.hidden = false;
       discordError.textContent = "";
       verifiedDiscordId = result.id;
     } catch (error) {
-      if (discordId.value.trim() === value) {
+      if (discordUsername.value.trim() === value) {
         discordError.textContent = error.message || "Discord account lookup failed.";
+        verifiedDiscordId = "";
+        discordPreview.hidden = true;
       }
     }
   }, 450);
@@ -64,8 +72,8 @@ form.addEventListener("submit", async event => {
   event.preventDefault();
   notice.className = "notice";
 
-  if (!verifiedDiscordId || verifiedDiscordId !== discordId.value.trim()) {
-    showNotice("Please enter a valid Discord ID and wait for the account preview.", "err");
+  if (!verifiedDiscordId) {
+    showNotice("Please enter your Discord username and wait for the account preview.", "err");
     return;
   }
 

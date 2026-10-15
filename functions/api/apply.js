@@ -50,7 +50,7 @@ export async function onRequestPost({ request, env }) {
 
     const user = await lookup.json();
     const escapeDiscord = value =>
-      String(value).replace(/[`@*_~|>]/g, "\\$&").slice(0, 500);
+      String(value).replace(/[`@*_~|><\[\]]/g, "\\$&").slice(0, 500);
 
     const message = [
       "**New vJetstar pilot application**",
